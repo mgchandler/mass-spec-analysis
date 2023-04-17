@@ -33,7 +33,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         dirname = sys.argv[1]
     else:
-        dirname = os.path.join(".", "data")
+        dirname = os.path.join(".", "example_data")
     # Default kwargs
     kwargs = {
         "output_name":"output.csv",
