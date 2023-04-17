@@ -37,7 +37,7 @@ if __name__ == "__main__":
     # Default kwargs
     kwargs = {
         "output_name":"output.csv",
-        "plot":False,
+        "plot":True,
         "stable_col":"11B",
     }
     # Get the rest.
@@ -101,6 +101,10 @@ if __name__ == "__main__":
                 # And kind="linear" does a linear interpolation between previous and next points.
                 func = interp1d(gas_time, gas_vals, kind="next", bounds_error=False, fill_value=(gas_vals[0], gas_vals[-1]))
                 stable_corrected.loc[:, column] -= func(mmnt_time)
+            
+            # Recalculate ratios
+            stable_corrected.loc[:, "11B/10B (1)"] = stable_corrected.loc[:, "11B"] / stable_corrected.loc[:, "10B"]
+            stable_corrected.loc[:, "11B/10.066 (2)"] = stable_corrected.loc[:, "11B"] / stable_corrected.loc[:, "10.066"]
             
             # Combine stable_data and stable_corrected to remove any outliers.
             # Note that we only need one copy of Time column, so remove the one
