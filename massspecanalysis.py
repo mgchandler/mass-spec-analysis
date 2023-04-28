@@ -189,7 +189,7 @@ def diff(time, values, num=5, return_residual=False):
     else:
         return time, dVdt
 
-def stable_cycles(time, values, num=5, slope=.001):
+def stable_cycles(time, values, start_offset=10, end_offset=5, slope=.001):
     """ 
     Returns the start and end index within `values` for which the sample is 
     stable within the machine. This is done based on the slope of `values` at
@@ -227,19 +227,23 @@ def stable_cycles(time, values, num=5, slope=.001):
         if values.shape[1] != 1:
             warnings.warn("stable_cycles(): `values` contains multiple columns. Only the first column will be used to compute the stable cycles.")
     # Compute the slope of `values` wrt `time`
-    t, dVdt = diff(time, values, num=num)
+    t, dVdt = diff(time, values)
     
     # Find the peaks of this plot. It is expected that there will be a lot of
     # peaks when the sample is stable, but when it is ramping up and down there
     # will not be much at all. In this case, we only care about the first and
     # last peak.
     peaks = find_peaks(np.abs(dVdt[:, 0]), slope)[0]
-    # Get the cycle numbers of the first and last peak.
-    ramp_up   = t.index.to_list()[peaks[0]]
-    ramp_down = t.index.to_list()[peaks[-1]]
-    # These points are where slope is largest - move start and end inwards to
-    # reduce the amount of ramping left in the data.
-    return ramp_up+num, ramp_down-num
+    if len(peaks) < 2:
+        warnings.warn("No peaks found in this data set!")
+        return 0, 0
+    else:
+        # Get the cycle numbers of the first and last peak.
+        ramp_up   = t.index.to_list()[peaks[0]]
+        ramp_down = t.index.to_list()[peaks[-1]]
+        # These points are where slope is largest - move start and end inwards to
+        # reduce the amount of ramping left in the data.
+        return ramp_up + start_offset, ramp_down - end_offset
 
 def blank_signal(time, values, num=5, factor=3):
     """ 
@@ -318,8 +322,9 @@ def remove_outliers(data, outlier_columns, factor=3):
         mean = data.mean(0)
         std  = data.std(0)
         # Find outliers.
-        in_range = ((data.loc[:, outlier_columns] > mean.loc[outlier_columns] - factor*std.loc[outlier_columns]) &  # Keep data within factor*std of mean.
-                    (data.loc[:, outlier_columns] < mean.loc[outlier_columns] + factor*std.loc[outlier_columns])).any(axis=1) # All columns should be in the range for the cycle to be valid.
+        in_range = ((data.loc[:, outlier_columns] < mean.loc[outlier_columns] - factor*std.loc[outlier_columns]) |  # Find data outside of the range
+                    (data.loc[:, outlier_columns] > mean.loc[outlier_columns] + factor*std.loc[outlier_columns])).any(axis=1) # All columns should be in the range for the cycle to be valid.
+        in_range = ~in_range
         # Keep everything that isn't an outlier.
         data = data[in_range.to_list()]
     
