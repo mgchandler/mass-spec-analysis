@@ -4,6 +4,7 @@ Functions used in the analysis of mass spectrometry data.
 Authors: Matt Chandler (m.chandler@bristol.ac.uk), Michael Henehan (michael.henehan@bristol.ac.uk)
 """
 import datetime as dt
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy.signal import find_peaks
@@ -121,6 +122,27 @@ def rearrange_means(means, std, supplementary=None):
 
 #%% Analysis functions
 
+def moving_avg(values, n=5):
+    """
+    Compute the moving average of values in the 0th axis.
+
+    Parameters
+    ----------
+    values : broadcastable to np.ndarray
+        Values of shape (N, m).
+    num : int, optional
+        The number of consecutive values which will be summed. The default is
+        5.
+
+    Returns
+    -------
+    avg_values : np.ndarray
+        Moving average array of shape (N-num, m).
+    """
+    avg_values = np.cumsum(np.asarray(values), axis=0)
+    avg_values[n:] = avg_values[n:] - avg_values[:-n]
+    return avg_values[n-1:] / n
+
 def diff(time, values, num=5, return_residual=False):
     """ 
     Determines the differential of `values` with respect to `time`. To smooth
@@ -189,7 +211,7 @@ def diff(time, values, num=5, return_residual=False):
     else:
         return time, dVdt
 
-def stable_cycles(time, values, start_offset=10, end_offset=5, slope=.001):
+def stable_cycles(time, values, start_offset=15, end_offset=20, moving_avg_n=15, frac_of_max_slope=.025, filename=""):
     """ 
     Returns the start and end index within `values` for which the sample is 
     stable within the machine. This is done based on the slope of `values` at
@@ -204,15 +226,25 @@ def stable_cycles(time, values, start_offset=10, end_offset=5, slope=.001):
     values : pd.Series or pd.DataFrame
         Values of shape (N, m) containing the measurements taken at times
         corresponding to `time`. Note that only the first column will be used.
-    num : int, optional
-        The number of consecutive points which will be used to regress the
-        slope at each time, passed through to diff().
-    slope : TYPE, optional
-        The prominence used to locate peaks, passed through to find_peaks().
-        Peaks found in dVdt will be larger than this number. Note that only
-        the first and last peak are used: this only needs to be large enough to
-        ignore blips in the 11B gas signal. The default is .001, will need
-        tailoring based on blips.
+    start_offset : int, optional
+        The number of cycles to offset by when the `ramp_up` cycle is found - 
+        this should be set such that the voltage has plateaued after slope is
+        maximum. The default is 15.
+    end_offset : int, optional
+        The number of cycles to offset by when the `ramp_down` cycle is found -
+        this should be set such that we are far away from the drop in voltage.
+        The default is 20.
+    moving_avg_n : int, optional
+        The number of cycles which will be used to compute the moving average
+        of `values`. This needs to be large enough that the blips in the gas
+        signal are mostly smoothed out. The default is 15.
+    frac_of_max_slope : float, optional
+        Used to determine the prominence used to locate peaks. Prominence is
+        then the fraction of the maximum signal, to ensure that we always find
+        the peaks if any exist. The default is 0.1 (10%).
+    filename : str, optional
+        Used in the event that there is a misfire of the detector to inform the
+        user which experiment failed. The default is "".
     
     Returns
     -------
@@ -226,17 +258,38 @@ def stable_cycles(time, values, start_offset=10, end_offset=5, slope=.001):
     if len(values.shape) != 1:
         if values.shape[1] != 1:
             warnings.warn("stable_cycles(): `values` contains multiple columns. Only the first column will be used to compute the stable cycles.")
-    # Compute the slope of `values` wrt `time`
-    t, dVdt = diff(time, values)
     
+    # Get the moving average of `values`, to smooth out any noise.
+    avg_values = moving_avg(values, moving_avg_n)
+    # Compute the slope of `values` wrt `time`
+    t, dVdt = diff(time.iloc[moving_avg_n-1:], avg_values)
+    gas_std = np.std(dVdt[-50:, 0])
     # Find the peaks of this plot. It is expected that there will be a lot of
     # peaks when the sample is stable, but when it is ramping up and down there
     # will not be much at all. In this case, we only care about the first and
     # last peak.
-    peaks = find_peaks(np.abs(dVdt[:, 0]), slope)[0]
-    if len(peaks) < 2:
-        warnings.warn("No peaks found in this data set!")
-        return 0, 0
+    prominence = max(frac_of_max_slope * np.abs(dVdt[:, 0]).max(), 10*gas_std)
+    peaks = find_peaks(np.abs(dVdt[:, 0]), prominence)[0]
+    # Sometimes it's useful to plot the signal + dVdt plots. Leaving this plot
+    # here to make life easier when debugging.
+    # fig, (ax1, ax2) = plt.subplots(2, 1, layout="constrained", sharex=True, figsize=(8,8), dpi=100)
+    # ax1.plot(time, values, c='C0')
+    # ax1.plot(time.iloc[moving_avg_n-1:], avg_values, 'k--', alpha=0.5)
+    # ax1.set_ylabel("11B Voltage")
+    # fig.suptitle(filename)
+    # ax2.plot(t, np.abs(dVdt), c='C1')
+    # ax2.plot([t.iloc[0], t.iloc[-1]], [prominence, prominence], color='gray', alpha=.5)
+    # ax2.scatter(t.iloc[peaks], np.abs(dVdt[peaks]), 10, c='r')
+    # ax2.set_ylabel("dV/dt")
+    # ax2.set_xlabel("Time")
+    # plt.show()
+    
+    # If the detector misfired, we will probably have lots of peaks, but they
+    # must by definition be smaller than the std deviation of the gas signal,
+    # so none will be found.
+    if len(peaks) < 2: 
+        warnings.warn("No signal found in {}, probable misfire!".format(filename))
+        return None, None
     else:
         # Get the cycle numbers of the first and last peak.
         ramp_up   = t.index.to_list()[peaks[0]]

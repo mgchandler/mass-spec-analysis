@@ -33,7 +33,7 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         dirname = sys.argv[1]
     else:
-        dirname = os.path.join(".", "example_data")
+        dirname = os.path.join("..", "test data 1")
     # Default kwargs
     kwargs = {
         "output_name":"output.csv",
@@ -66,8 +66,8 @@ if __name__ == "__main__":
             info, data = read_exp(os.path.join(dirname, filename), skipfooter=13, index_col=0, sep='\t', engine='python', usecols=range(8))
             mmnt_cols = data.columns[data.columns != "Time"]
             # Work out when the data is stable. Use 11B signal to do it.
-            start_cycle, end_cycle = stable_cycles(data["Time"], data[stable_col])
-            # Else define a custom point to start measuring the gas signal.
+#             start_cycle, end_cycle = stable_cycles(data["Time"], data[stable_col])
+            # Or, define a custom point to start measuring the gas signal.
             # Use case tends to be ~500 cycles long, get the last ~50.
             end_cycle = 450
             # Work out what the blank gas signal is for all data cols.
@@ -83,10 +83,14 @@ if __name__ == "__main__":
         # Check filetype
         if filename[-4:] == ".exp":
             # Read in the data.
+            if "096" in filename:
+                pass
             info, data = read_exp(os.path.join(dirname, filename), skipfooter=13, index_col=0, sep='\t', engine='python', usecols=range(8))
             mmnt_cols = data.columns[data.columns != "Time"]
             # Work out when sample is stable using 11B. Returns indices within which the sample is considered stable.
-            start_cycle, end_cycle = stable_cycles(data["Time"], data[stable_col])
+            start_cycle, end_cycle = stable_cycles(data["Time"], data[stable_col], filename=filename)
+            if start_cycle is None or end_cycle is None:
+                continue
             stable_data = data.loc[start_cycle:end_cycle, data.columns != "Time"]
             
             # Regress the blank signals in time.
