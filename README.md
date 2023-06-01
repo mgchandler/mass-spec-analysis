@@ -5,6 +5,8 @@ The program finds the background (gas) signal made available in the last ~50 cyc
 
 A second pass which computes the summary data is performed. Only 'stable cycles' are considered in analysis, for which the sample is considered stable within the machine. Background is then removed by interpolating gas signals, and output data is saved.
 
+Developed as part of the [Ask-JGI](https://www.bristol.ac.uk/golding/ask-jgi/) support service run by the [Jean Golding Institute](https://www.bristol.ac.uk/golding/)
+
 ## Files:
 - `massspecanalysis.py` : module containing functions used for analysis.
 - `main.py` : script designed to be executed from the command line or within any Python IDE. Spyder was used to develop it. Call this from the command line with command `python main.py <directory> output_name=<output_name> plot=<plot_diagnostic> stable_col=<stable_col>`. All arguments here are optional and therefore do not need to be included when calling the function.
